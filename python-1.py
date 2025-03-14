@@ -44,11 +44,11 @@ def fetch_data():
 # Layout for the dashboard
 app.layout = html.Div(style={'backgroundColor': 'black', 'color': 'white', 'padding': '20px'}, children=[
     # Header Section
-    html.H1("Smart Visual Hat Monitoring Dashboard", style={'textAlign': 'center', 'color': 'white'}),
-    
-    # Interval component to refresh data every 3 minutes
-    dcc.Interval(id='interval-component', interval=180000, n_intervals=0),
-    
+    html.H1("Live Stream Smart Visual Hat Monitoring Dashboard", style={'textAlign': 'center', 'color': 'white'}),
+
+    # Interval component to refresh data every 5 seconds for live updates
+    dcc.Interval(id='interval-component', interval=5000, n_intervals=0),  # 5 seconds interval
+
     # First row: Device Distribution and Overall Dashboard Performance
     html.Div([
         html.Div([html.Div(dcc.Graph(id='device-distribution'), style={'border': '2px solid #cccccc', 'padding': '10px', 'borderRadius': '5px'})], style={'width': '48%', 'display': 'inline-block', 'verticalAlign': 'top'}),
@@ -74,9 +74,9 @@ app.layout = html.Div(style={'backgroundColor': 'black', 'color': 'white', 'padd
     ], style={'display': 'flex', 'justifyContent': 'space-around', 'marginBottom': '20px'}),
 
     # Buttons and Download Option
-    html.Div([html.Button('Temperature Stats', id='temp-stats-btn', style={'margin': '5px', 'padding': '10px 20px', 'backgroundColor': '#2c3e50', 'color': 'white'}),
-              html.Button('Network Stability', id='network-stability-btn', style={'margin': '5px', 'padding': '10px 20px', 'backgroundColor': '#2c3e50', 'color': 'white'}),
-              html.Button('Device Config', id='device-config-btn', style={'margin': '5px', 'padding': '10px 20px', 'backgroundColor': '#2c3e50', 'color': 'white'}),
+    html.Div([html.Button('Temperature Stats', id='temp-stats-btn', style={'margin': '5px', 'padding': '10px 20px', 'backgroundColor': '#2c3e50', 'color': 'white'}), 
+              html.Button('Network Stability', id='network-stability-btn', style={'margin': '5px', 'padding': '10px 20px', 'backgroundColor': '#2c3e50', 'color': 'white'}), 
+              html.Button('Device Config', id='device-config-btn', style={'margin': '5px', 'padding': '10px 20px', 'backgroundColor': '#2c3e50', 'color': 'white'}), 
               html.Button('Overall Performance', id='overall-performance-btn', style={'margin': '5px', 'padding': '10px 20px', 'backgroundColor': '#2c3e50', 'color': 'white'})], style={'textAlign': 'center', 'marginTop': '20px'}),
 
     html.Div([html.Button('Download Report', id='download-report-btn', style={'margin': '5px', 'padding': '10px 20px', 'backgroundColor': '#2c3e50', 'color': 'white'})], style={'textAlign': 'center', 'marginTop': '20px'}),
@@ -88,7 +88,7 @@ app.layout = html.Div(style={'backgroundColor': 'black', 'color': 'white', 'padd
     dcc.Download(id='download-report')
 ])
 
-# Callback to update data every 3 minutes
+# Callback to update data every 5 seconds for live stream
 @app.callback(
     [Output('device-distribution', 'figure'),
      Output('power-management', 'figure'),
@@ -158,4 +158,8 @@ def update_data(n_intervals):
 
 # Running the server with explicit port configuration
 if __name__ == '__main__':
-    app.run_server(debug=True, host="0.0.0.0", port=8050)
+    app.run_server(debug=True, host="0.0.0.0", port=8050) 
+    
+        
+    
+       
