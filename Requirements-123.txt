@@ -1,5 +1,0 @@
-Dash
-Plotly
-Pandas
-Requests
-Dash Table 
