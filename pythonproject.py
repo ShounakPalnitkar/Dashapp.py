@@ -1,11 +1,18 @@
 import dash
 from dash import dcc, html, Input, Output, dash_table
 import plotly.graph_objects as go
+import plotly.express as px
 from datetime import datetime
 import firebase_admin
 from firebase_admin import credentials, db
 import os
 import logging
+import dash_bootstrap_components as dbc
+import pandas as pd
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # Initialize Firebase
 def initialize_firebase():
@@ -35,11 +42,54 @@ def initialize_firebase():
         logger.error(f"Error initializing Firebase: {e}")
         return False
 
+def create_empty_figure(message="No data available"):
+    """Create an empty figure with a message."""
+    fig = go.Figure()
+    fig.add_annotation(
+        text=message,
+        xref="paper", yref="paper",
+        x=0.5, y=0.5,
+        showarrow=False,
+        font=dict(size=20)
+    fig.update_layout(
+        plot_bgcolor='rgba(0,0,0,0)',
+        paper_bgcolor='rgba(0,0,0,0)',
+        font={'color': 'white'}
+    )
+    return fig
+
+def fetch_firebase_data():
+    """Fetch data from Firebase and return as DataFrame."""
+    try:
+        if not firebase_initialized:
+            return pd.DataFrame()
+        
+        ref = db.reference('/')
+        data = ref.get()
+        
+        if not data:
+            return pd.DataFrame()
+        
+        # Convert data to DataFrame
+        records = []
+        for timestamp, values in data.items():
+            record = {
+                'timestamp': datetime.fromtimestamp(int(timestamp)),
+                'cpu_usage': values.get('cpu_usage', 0),
+                'memory_usage': values.get('memory_usage', 0)
+            }
+            records.append(record)
+        
+        return pd.DataFrame(records)
+    except Exception as e:
+        logger.error(f"Error fetching Firebase data: {e}")
+        return pd.DataFrame()
+
 # Initialize Firebase connection
 firebase_initialized = initialize_firebase()
 
 # Initialize the Dash app
-app = dash.Dash(__name__)
+app = dash.Dash(__name__, external_stylesheets=[dbc.themes.DARKLY])
 server = app.server
 
 # Fetch the port dynamically from environment variable
@@ -55,8 +105,29 @@ app.layout = html.Div([
         dbc.Col(dcc.Graph(id='memory-usage-graph', figure=create_empty_figure()), width=6),
     ]),
     dbc.Row([
-        dbc.Col(dash_table.DataTable(id='data-table', style_table={'height': '450px', 'overflowY': 'auto'},), width=12)
+        dbc.Col(dash_table.DataTable(
+            id='data-table',
+            columns=[
+                {'name': 'Timestamp', 'id': 'timestamp'},
+                {'name': 'CPU Usage', 'id': 'cpu_usage'},
+                {'name': 'Memory Usage', 'id': 'memory_usage'}
+            ],
+            style_table={'height': '450px', 'overflowY': 'auto'},
+            style_header={
+                'backgroundColor': 'rgb(30, 30, 30)',
+                'color': 'white'
+            },
+            style_cell={
+                'backgroundColor': 'rgb(50, 50, 50)',
+                'color': 'white'
+            }
+        ), width=12)
     ]),
+    dcc.Interval(
+        id='interval-component',
+        interval=60*1000,  # Update every minute
+        n_intervals=0
+    )
 ])
 
 # Define the callback to update graphs and table
@@ -75,8 +146,16 @@ def update_graphs_and_table(n_intervals):
     cpu_fig = px.line(df, x='timestamp', y='cpu_usage', title='CPU Usage Over Time')
     memory_fig = px.line(df, x='timestamp', y='memory_usage', title='Memory Usage Over Time')
     
-    cpu_fig.update_layout(plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', font={'color': 'white'})
-    memory_fig.update_layout(plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', font={'color': 'white'})
+    cpu_fig.update_layout(
+        plot_bgcolor='rgba(0,0,0,0)',
+        paper_bgcolor='rgba(0,0,0,0)',
+        font={'color': 'white'}
+    )
+    memory_fig.update_layout(
+        plot_bgcolor='rgba(0,0,0,0)',
+        paper_bgcolor='rgba(0,0,0,0)',
+        font={'color': 'white'}
+    )
 
     data_table = df.to_dict('records')
     
