@@ -1,21 +1,14 @@
 import dash
-from dash import dcc, html, Input, Output, dash_table, no_update
-import plotly.express as px
+from dash import dcc, html, Input, Output, dash_table
 import plotly.graph_objects as go
-import pandas as pd
-import dash_bootstrap_components as dbc
-from datetime import datetime, timedelta
+from datetime import datetime
 import firebase_admin
 from firebase_admin import credentials, db
+import os
 import logging
-from typing import Tuple, Dict, List, Union
-
-# Configure logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
 
 # Initialize Firebase
-def initialize_firebase() -> bool:
+def initialize_firebase():
     """Initialize Firebase connection with credentials."""
     try:
         firebase_credentials = {
@@ -46,72 +39,11 @@ def initialize_firebase() -> bool:
 firebase_initialized = initialize_firebase()
 
 # Initialize the Dash app
-app = dash.Dash(__name__, external_stylesheets=[dbc.themes.DARKLY])
+app = dash.Dash(__name__)
 server = app.server
 
-def create_empty_figure(message: str = "No data available") -> go.Figure:
-    """Create an empty figure with a message."""
-    fig = go.Figure()
-    fig.update_layout(
-        plot_bgcolor='rgba(0,0,0,0)',
-        paper_bgcolor='rgba(0,0,0,0)',
-        font={'color': 'white'},
-        xaxis={'visible': False},
-        yaxis={'visible': False},
-        annotations=[{
-            'text': message,
-            'showarrow': False,
-            'font': {'size': 16}
-        }]
-    )
-    return fig
-
-def fetch_firebase_data() -> pd.DataFrame:
-    """Fetch and process data from Firebase Realtime Database."""
-    if not firebase_initialized:
-        logger.warning("Firebase not initialized")
-        return pd.DataFrame()
-    
-    try:
-        ref = db.reference('notifications')
-        data = ref.get()
-        
-        if not data:
-            logger.info("No data received from Firebase")
-            return pd.DataFrame()
-            
-        records = []
-        for timestamp, values in data.items():
-            try:
-                # Convert timestamp to datetime
-                if isinstance(timestamp, str):
-                    timestamp = float(timestamp)
-                record = {'timestamp': datetime.fromtimestamp(timestamp)}
-                
-                # Validate and clean values
-                cleaned_values = {}
-                for key, value in values.items():
-                    if isinstance(value, str):
-                        value = value.strip()
-                        if value.replace('.', '', 1).isdigit():
-                            value = float(value)
-                    cleaned_values[key] = value
-                
-                record.update(cleaned_values)
-                records.append(record)
-            except Exception as e:
-                logger.warning(f"Error processing record {timestamp}: {e}")
-                continue
-                
-        if not records:
-            return pd.DataFrame()
-            
-        df = pd.DataFrame(records)
-        logger.info(f"DataFrame created with {len(df)} rows")
-        return df
-    except Exception as e:
-        logger.error(f"Error fetching data from Firebase: {e}")
-        return pd.DataFrame()
+# Fetch the port dynamically from environment variable
+port = os.getenv('PORT', 8050)  # Default to 8050 if PORT is not set
 
 # Define the layout of the app
 app.layout = html.Div([
@@ -134,25 +66,21 @@ app.layout = html.Div([
      Output('data-table', 'data')],
     Input('interval-component', 'n_intervals')
 )
-def update_graphs_and_table(n_intervals: int) -> Tuple[go.Figure, go.Figure, List[Dict[str, Union[str, float]]]]:
-    """Fetch data from Firebase and update graphs and table."""
+def update_graphs_and_table(n_intervals):
     df = fetch_firebase_data()
     
     if df.empty:
         return create_empty_figure("No data available"), create_empty_figure("No data available"), []
     
-    # Create the CPU Usage and Memory Usage plots
     cpu_fig = px.line(df, x='timestamp', y='cpu_usage', title='CPU Usage Over Time')
     memory_fig = px.line(df, x='timestamp', y='memory_usage', title='Memory Usage Over Time')
     
-    # Update plot formatting
     cpu_fig.update_layout(plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', font={'color': 'white'})
     memory_fig.update_layout(plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', font={'color': 'white'})
 
-    # Convert data to format for the table
     data_table = df.to_dict('records')
     
     return cpu_fig, memory_fig, data_table
 
 if __name__ == '__main__':
-    app.run_server(debug=True)
+    app.run_server(debug=True, port=int(port))
