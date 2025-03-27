@@ -6,14 +6,15 @@ import dash_bootstrap_components as dbc
 import firebase_admin
 from firebase_admin import credentials, firestore
 from datetime import datetime
+import plotly.graph_objects as go
 
 # Initialize the Dash app
 app = dash.Dash(__name__, external_stylesheets=[dbc.themes.DARKLY])
 server = app.server
 
-# =============================================
+# ==============================================
 # Firebase Initialization
-# =============================================
+# ==============================================
 
 # Initialize Firebase with your credentials
 cred = credentials.Certificate({
@@ -70,201 +71,83 @@ def load_data():
         return pd.DataFrame(columns=['timestamp', 'event_type', 'label', 'confidence',
                                    'estimated_distance_cm', 'FPS', 'CPU', 'MEM', 'TEMP'])
 
-# =============================================
+# ==============================================
 # Dashboard Layout (same as before)
-# =============================================
+# ==============================================
 
-app.layout = dbc.Container(fluid=True, children=[
+app.layout = dbc.Container(fluid=True, children=[ 
     # Title
     dbc.Row([
-        dbc.Col(html.H1("Smart Hat Analytics Dashboard", 
-                       className="text-center my-4"))
-    ]),
-    
+        dbc.Col(html.H1("Smart Hat Analytics Dashboard", className="text-center my-4"))
+    ]), 
+
     # Refresh interval
     dcc.Interval(id='interval-component', interval=10*1000, n_intervals=0),
     
     # System Metrics Row
-    dbc.Row([
-        dbc.Col(dbc.Card([
-            dbc.CardHeader("CPU Usage (%)", className="h5"),
-            dbc.CardBody(dcc.Graph(id='cpu-graph'))
+    dbc.Row([ 
+        dbc.Col(dbc.Card([ 
+            dbc.CardHeader("CPU Usage (%)", className="h5"), 
+            dbc.CardBody(dcc.Graph(id='cpu-graph')) 
         ], className="shadow"), md=4),
         
-        dbc.Col(dbc.Card([
-            dbc.CardHeader("Memory Usage (%)", className="h5"),
-            dbc.CardBody(dcc.Graph(id='mem-graph'))
+        dbc.Col(dbc.Card([ 
+            dbc.CardHeader("Memory Usage (%)", className="h5"), 
+            dbc.CardBody(dcc.Graph(id='mem-graph')) 
         ], className="shadow"), md=4),
         
-        dbc.Col(dbc.Card([
-            dbc.CardHeader("Temperature (°C)", className="h5"),
-            dbc.CardBody(dcc.Graph(id='temp-graph'))
+        dbc.Col(dbc.Card([ 
+            dbc.CardHeader("Temperature (°C)", className="h5"), 
+            dbc.CardBody(dcc.Graph(id='temp-graph')) 
         ], className="shadow"), md=4)
-    ], className="mb-4"),
-    
-    # Detection Metrics Row
-    dbc.Row([
-        dbc.Col(dbc.Card([
-            dbc.CardHeader("Detection Frequency", className="h5"),
-            dbc.CardBody(dcc.Graph(id='detection-freq'))
+    ]),
+
+    # Event Type Distribution
+    dbc.Row([ 
+        dbc.Col(dbc.Card([ 
+            dbc.CardHeader("Event Type Distribution", className="h5"), 
+            dbc.CardBody(dcc.Graph(id='event-type-graph')) 
         ], className="shadow"), md=6),
-        
-        dbc.Col(dbc.Card([
-            dbc.CardHeader("Detection Confidence", className="h5"),
-            dbc.CardBody(dcc.Graph(id='confidence-hist'))
+
+        # Latest Events Table
+        dbc.Col(dbc.Card([ 
+            dbc.CardHeader("Latest Events", className="h5"), 
+            dbc.CardBody(dash_table.DataTable(id='latest-events', style_table={'height': '300px', 'overflowY': 'auto'}))
         ], className="shadow"), md=6)
-    ], className="mb-4"),
-    
-    # Distance and Performance Row
-    dbc.Row([
-        dbc.Col(dbc.Card([
-            dbc.CardHeader("Object Distance (cm)", className="h5"),
-            dbc.CardBody(dcc.Graph(id='distance-graph'))
-        ], className="shadow"), md=6),
-        
-        dbc.Col(dbc.Card([
-            dbc.CardHeader("Frames Per Second", className="h5"),
-            dbc.CardBody(dcc.Graph(id='fps-graph'))
-        ], className="shadow"), md=6)
-    ], className="mb-4"),
-    
-    # Data Table
-    dbc.Row([
-        dbc.Col(dbc.Card([
-            dbc.CardHeader("Event Log", className="h5"),
-            dbc.CardBody(
-                dash_table.DataTable(
-                    id='data-table',
-                    columns=[{"name": i, "id": i} for i in [
-                        'timestamp', 'event_type', 'label', 'confidence',
-                        'estimated_distance_cm', 'FPS', 'CPU', 'MEM', 'TEMP'
-                    ]],
-                    page_size=10,
-                    style_table={'overflowX': 'auto', 'height': '300px'},
-                    style_cell={
-                        'textAlign': 'left',
-                        'padding': '8px',
-                        'backgroundColor': 'rgba(0,0,0,0)',
-                        'color': 'white',
-                        'border': '1px solid #444'
-                    },
-                    style_header={
-                        'backgroundColor': '#2c3e50',
-                        'fontWeight': 'bold'
-                    },
-                    filter_action="native",
-                    sort_action="native"
-                )
-            )
-        ], className="shadow"), width=12)
     ])
 ])
 
-# =============================================
-# Callbacks (same as before)
-# =============================================
+# ==============================================
+# Callback to update graphs and table
+# ==============================================
 
 @app.callback(
     [Output('cpu-graph', 'figure'),
      Output('mem-graph', 'figure'),
      Output('temp-graph', 'figure'),
-     Output('detection-freq', 'figure'),
-     Output('confidence-hist', 'figure'),
-     Output('distance-graph', 'figure'),
-     Output('fps-graph', 'figure'),
-     Output('data-table', 'data')],
+     Output('event-type-graph', 'figure'),
+     Output('latest-events', 'data')],
     [Input('interval-component', 'n_intervals')]
 )
-def update_dashboard(n):
-    df = load_data()
+def update_dashboard(n_intervals):
+    df = load_data()  # Load data from Firebase Firestore
     
-    if df.empty:
-        # Return empty figures if no data
-        empty_fig = go.Figure()
-        empty_fig.update_layout(
-            plot_bgcolor='rgba(0,0,0,0)',
-            paper_bgcolor='rgba(0,0,0,0)',
-            font={'color': 'white'},
-            xaxis={'visible': False},
-            yaxis={'visible': False},
-            annotations=[{
-                'text': 'No data available',
-                'showarrow': False,
-                'font': {'size': 16}
-            }]
-        )
-        return [empty_fig] * 7 + [df.to_dict('records')]
+    # Generate CPU, Memory, and Temperature graphs
+    cpu_graph = px.line(df, x='timestamp', y='CPU', title="CPU Usage (%)")
+    mem_graph = px.line(df, x='timestamp', y='MEM', title="Memory Usage (%)")
+    temp_graph = px.line(df, x='timestamp', y='TEMP', title="Temperature (°C)")
     
-    # Filter data
-    system_stats = df[df['event_type'] == 'system_stats'].copy()
-    detections = df[df['event_type'] == 'detection'].copy()
+    # Event Type Distribution (bar graph)
+    event_type_counts = df['event_type'].value_counts()
+    event_type_graph = px.bar(event_type_counts, x=event_type_counts.index, y=event_type_counts.values, title="Event Type Distribution")
     
-    # Create figures (same as before)
-    cpu_fig = px.line(
-        system_stats, x='timestamp', y='CPU',
-        title='', labels={'CPU': 'Usage %'},
-        color_discrete_sequence=['#1f77b4']
-    )
+    # Display latest events in table
+    latest_events = df[['timestamp', 'event_type', 'label', 'confidence']].tail(10).to_dict('records')
     
-    mem_fig = px.line(
-        system_stats, x='timestamp', y='MEM',
-        title='', labels={'MEM': 'Usage %'},
-        color_discrete_sequence=['#ff7f0e']
-    )
-    
-    temp_fig = px.line(
-        system_stats, x='timestamp', y='TEMP',
-        title='', labels={'TEMP': '°C'},
-        color_discrete_sequence=['#d62728']
-    ).add_hline(y=80, line_dash="dash", line_color="red")
-    
-    detection_freq = px.histogram(
-        detections, x='timestamp', 
-        title='', labels={'timestamp': 'Time'},
-        color_discrete_sequence=['#2ca02c']
-    )
-    
-    confidence_hist = px.histogram(
-        detections, x='confidence',
-        title='', labels={'confidence': 'Score'},
-        color_discrete_sequence=['#9467bd']
-    )
-    
-    distance_fig = px.scatter(
-        detections, x='timestamp', y='estimated_distance_cm',
-        color='confidence',
-        title='', labels={'estimated_distance_cm': 'Distance (cm)'},
-        color_continuous_scale='Viridis'
-    )
-    
-    fps_fig = px.scatter(
-        detections, x='timestamp', y='FPS',
-        title='', labels={'FPS': 'Frames Per Second'},
-        color_discrete_sequence=['#17becf']
-    )
-    
-    # Apply consistent styling
-    for fig in [cpu_fig, mem_fig, temp_fig, detection_freq, 
-               confidence_hist, distance_fig, fps_fig]:
-        fig.update_layout(
-            plot_bgcolor='rgba(0,0,0,0)',
-            paper_bgcolor='rgba(0,0,0,0)',
-            font={'color': 'white'},
-            margin={'l': 40, 'r': 40, 't': 30, 'b': 30},
-            xaxis={'gridcolor': '#444'},
-            yaxis={'gridcolor': '#444'}
-        )
-    
-    return (
-        cpu_fig, mem_fig, temp_fig,
-        detection_freq, confidence_hist,
-        distance_fig, fps_fig,
-        df.to_dict('records')
-    )
+    return cpu_graph, mem_graph, temp_graph, event_type_graph, latest_events
 
-# =============================================
-# Run the App
-# =============================================
-
+# ==============================================
+# Run the server
+# ==============================================
 if __name__ == '__main__':
-    app.run_server(debug=True, host="0.0.0.0", port=8050)
+    app.run_server(debug=True)
