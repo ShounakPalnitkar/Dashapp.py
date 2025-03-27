@@ -7,7 +7,6 @@ import dash_bootstrap_components as dbc
 from datetime import datetime, timedelta
 import firebase_admin
 from firebase_admin import credentials, db
-import time
 import logging
 from typing import Tuple, Dict, List, Union
 
@@ -124,57 +123,36 @@ app.layout = html.Div([
         dbc.Col(dcc.Graph(id='memory-usage-graph', figure=create_empty_figure()), width=6),
     ]),
     dbc.Row([
-        dbc.Col(dcc.Graph(id='temperature-graph', figure=create_empty_figure()), width=6),
-        dbc.Col(dcc.Graph(id='detection-frequency-graph', figure=create_empty_figure()), width=6),
-    ]),
-    dbc.Row([
-        dbc.Col(dcc.Graph(id='detection-confidence-graph', figure=create_empty_figure()), width=6),
-    ]),
-    dbc.Row([
-        dbc.Col(dash_table.DataTable(id='data-table'), width=12)
+        dbc.Col(dash_table.DataTable(id='data-table', style_table={'height': '450px', 'overflowY': 'auto'},), width=12)
     ]),
 ])
 
-# Define the callbacks to update graphs and data table
+# Define the callback to update graphs and table
 @app.callback(
     [Output('cpu-usage-graph', 'figure'),
      Output('memory-usage-graph', 'figure'),
-     Output('temperature-graph', 'figure'),
-     Output('detection-frequency-graph', 'figure'),
-     Output('detection-confidence-graph', 'figure'),
      Output('data-table', 'data')],
     Input('interval-component', 'n_intervals')
 )
-def update_graphs(n):
-    # Fetch data from Firebase
+def update_graphs_and_table(n_intervals: int) -> Tuple[go.Figure, go.Figure, List[Dict[str, Union[str, float]]]]:
+    """Fetch data from Firebase and update graphs and table."""
     df = fetch_firebase_data()
-
+    
     if df.empty:
-        return [create_empty_figure("No data available")] * 5, []
+        return create_empty_figure("No data available"), create_empty_figure("No data available"), []
+    
+    # Create the CPU Usage and Memory Usage plots
+    cpu_fig = px.line(df, x='timestamp', y='cpu_usage', title='CPU Usage Over Time')
+    memory_fig = px.line(df, x='timestamp', y='memory_usage', title='Memory Usage Over Time')
+    
+    # Update plot formatting
+    cpu_fig.update_layout(plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', font={'color': 'white'})
+    memory_fig.update_layout(plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', font={'color': 'white'})
 
-    # CPU Usage Graph
-    cpu_fig = px.line(df, x='timestamp', y='cpu_usage', title='CPU Usage')
-
-    # Memory Usage Graph
-    memory_fig = px.line(df, x='timestamp', y='memory_usage', title='Memory Usage')
-
-    # Temperature Graph
-    temp_fig = px.line(df, x='timestamp', y='temperature', title='Temperature')
-
-    # Detection Frequency Graph
-    freq_fig = px.line(df, x='timestamp', y='detection_frequency', title='Detection Frequency')
-
-    # Detection Confidence Graph
-    conf_fig = px.line(df, x='timestamp', y='detection_confidence', title='Detection Confidence')
-
-    # Data Table
+    # Convert data to format for the table
     data_table = df.to_dict('records')
+    
+    return cpu_fig, memory_fig, data_table
 
-    return cpu_fig, memory_fig, temp_fig, freq_fig, conf_fig, data_table
-
-# Interval component for live updates (optional)
-app.layout.children.append(dcc.Interval(id='interval-component', interval=30*1000, n_intervals=0))
-
-# Run the app
-if __name__ == "__main__":
+if __name__ == '__main__':
     app.run_server(debug=True)
