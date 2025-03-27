@@ -74,7 +74,7 @@ def fetch_firebase_data() -> pd.DataFrame:
         return pd.DataFrame()
     
     try:
-        ref = db.reference('smart_hat_data')
+        ref = db.reference('notifications')
         data = ref.get()
         
         if not data:
