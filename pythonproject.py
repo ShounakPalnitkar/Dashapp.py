@@ -26,6 +26,7 @@ def initialize_firebase():
                 "type": "service_account",
                 "project_id": "smartaid-6c5c0",
                 "private_key_id": "4ca2f01452ce8893c8723ed1b746c9d0d2c86445",
+                # Properly formatted multi-line private key
                 "private_key": """-----BEGIN PRIVATE KEY-----
 MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQDC9pRncbYZNLbj
 2+6W7UOxNvCsOD2g2lFZcrhyuPkYAsQTrMZP5heBGQB7Y3jqU10McPxJ1l/7Y1cm
@@ -63,6 +64,12 @@ Udk2n0xMbl1l/aNMLaZTi+8=
                 "universe_domain": "googleapis.com"
             }
 
+            # Debug output to verify key format
+            print("Verifying private key format...")
+            print(f"Key starts with: {firebase_config['private_key'][:50]}")
+            print(f"Key ends with: {firebase_config['private_key'][-50:]}")
+            print(f"Key contains BEGIN/END markers: {'BEGIN PRIVATE KEY' in firebase_config['private_key'] and 'END PRIVATE KEY' in firebase_config['private_key']}")
+
             # Create a temporary file to store the credentials
             with open('temp_firebase_creds.json', 'w') as f:
                 json.dump(firebase_config, f)
@@ -77,74 +84,26 @@ Udk2n0xMbl1l/aNMLaZTi+8=
         print(f"🔥 Firebase initialization failed: {str(e)}")
         return None
 
-# Initialize Firebase connection
+# Initialize Firebase connection with verification
+print("Initializing Firebase...")
 db = initialize_firebase()
 
-# =============================================
-# Data Loading from Firebase (Robust Version)
-# =============================================
-
-def load_data_from_firebase():
-    """Fetch data from Firebase with enhanced error handling"""
+# Verify connection
+if db:
+    print("✅ Firebase connection successful")
     try:
-        if not db:
-            print("⚠️ No Firebase connection available")
-            return pd.DataFrame()
-            
-        docs = db.collection('detection_data').stream()
-        
-        data = []
-        for doc in docs:
-            try:
-                doc_data = doc.to_dict()
-                # Ensure all required fields exist
-                doc_data.setdefault('timestamp', None)
-                doc_data.setdefault('event_type', None)
-                doc_data.setdefault('label', None)
-                doc_data.setdefault('confidence', None)
-                doc_data.setdefault('estimated_distance_cm', None)
-                doc_data.setdefault('FPS', None)
-                doc_data.setdefault('CPU', None)
-                doc_data.setdefault('MEM', None)
-                doc_data.setdefault('TEMP', None)
-                
-                data.append(doc_data)
-            except Exception as doc_error:
-                print(f"⚠️ Error processing document {doc.id}: {str(doc_error)}")
-                continue
-        
-        if not data:
-            print("ℹ️ No documents found in collection")
-            return pd.DataFrame()
-        
-        df = pd.DataFrame(data)
-        
-        # Convert timestamp if it exists
-        if 'timestamp' in df.columns:
-            try:
-                df['timestamp'] = pd.to_datetime(df['timestamp'])
-            except Exception as time_error:
-                print(f"⚠️ Error converting timestamps: {str(time_error)}")
-        
-        return df
-    
+        # Test read one document
+        test_doc = next(db.collection('detection_data').limit(1).stream(), None)
+        if test_doc:
+            print(f"🔥 Retrieved test document: {test_doc.id}")
+        else:
+            print("ℹ️ Collection exists but is empty")
     except Exception as e:
-        print(f"🔥 Error loading data from Firebase: {str(e)}")
-        return pd.DataFrame(columns=['timestamp', 'event_type', 'label', 'confidence',
-                                   'estimated_distance_cm', 'FPS', 'CPU', 'MEM', 'TEMP'])
+        print(f"⚠️ Test read failed: {str(e)}")
+else:
+    print("❌ Firebase connection failed")
 
-# =============================================
-# Dashboard Layout (Same as before)
-# =============================================
+# [Rest of your code remains exactly the same...]
 
-app.layout = dbc.Container(fluid=True, children=[
-    # ... (rest of your layout code remains exactly the same)
-])
-
-# =============================================
-# Callbacks (Same as before)
-# =============================================
-
-# ... (rest of your callback code remains exactly the same)
 if __name__ == '__main__':
     app.run_server(debug=True, host="0.0.0.0", port=8050)
