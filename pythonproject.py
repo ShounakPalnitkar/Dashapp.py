@@ -108,309 +108,73 @@ def fetch_firebase_data() -> pd.DataFrame:
             return pd.DataFrame()
             
         df = pd.DataFrame(records)
-        logger.info(f"DataFrame created with {len(df)} records")
-        
-        # Ensure all expected columns are present
-        expected_cols = [
-            'timestamp', 'event_type', 'label', 'confidence',
-            'estimated_distance_cm', 'FPS', 'CPU', 'MEM', 'TEMP'
-        ]
-        
-        for col in expected_cols:
-            if col not in df.columns:
-                df[col] = None
-                
-        # Convert numeric columns with better error handling
-        numeric_cols = ['confidence', 'estimated_distance_cm', 'FPS', 'CPU', 'MEM', 'TEMP']
-        for col in numeric_cols:
-            if col in df.columns:
-                df[col] = pd.to_numeric(df[col], errors='coerce')
-                # Replace NaN with None for JSON serialization
-                df[col] = df[col].where(pd.notnull(df[col]), None)
-        
-        # Filter to only keep recent data
-        cutoff_time = datetime.now() - timedelta(hours=24)
-        df = df[df['timestamp'] >= cutoff_time]
-        
-        return df.sort_values('timestamp', ascending=False)
-        
+        logger.info(f"DataFrame created with {len(df)} rows")
+        return df
     except Exception as e:
-        logger.error(f"Error fetching Firebase data: {e}")
+        logger.error(f"Error fetching data from Firebase: {e}")
         return pd.DataFrame()
 
-# =============================================
-# Dashboard Layout
-# =============================================
-
-app.layout = dbc.Container(fluid=True, children=[
-    # Title and status indicator
+# Define the layout of the app
+app.layout = html.Div([
     dbc.Row([
-        dbc.Col(html.H1("Smart Hat Analytics Dashboard", 
-                      className="text-center my-4"), width=10),
-        dbc.Col(html.Div(id='firebase-status', className="text-right my-4"), width=2)
-    ], justify="between"),
-    
-    # Refresh interval and data storage
-    dcc.Interval(id='interval-component', interval=10*1000, n_intervals=0),
-    dcc.Store(id='data-store'),
-    dcc.Store(id='last-update', data=time.time()),
-    
-    # System Metrics Row
+        dbc.Col(html.H1("Firebase Data Visualization"), width={"size": 6, "offset": 3}),
+    ]),
     dbc.Row([
-        dbc.Col(dbc.Card([
-            dbc.CardHeader("CPU Usage (%)", className="h5"),
-            dbc.CardBody(dcc.Graph(id='cpu-graph', config={'displayModeBar': False}))
-        ], className="shadow"), md=4),
-        
-        dbc.Col(dbc.Card([
-            dbc.CardHeader("Memory Usage (%)", className="h5"),
-            dbc.CardBody(dcc.Graph(id='mem-graph', config={'displayModeBar': False}))
-        ], className="shadow"), md=4),
-        
-        dbc.Col(dbc.Card([
-            dbc.CardHeader("Temperature (°C)", className="h5"),
-            dbc.CardBody(dcc.Graph(id='temp-graph', config={'displayModeBar': False}))
-        ], className="shadow"), md=4)
-    ], className="mb-4"),
-    
-    # Detection Metrics Row
+        dbc.Col(dcc.Graph(id='cpu-usage-graph', figure=create_empty_figure()), width=6),
+        dbc.Col(dcc.Graph(id='memory-usage-graph', figure=create_empty_figure()), width=6),
+    ]),
     dbc.Row([
-        dbc.Col(dbc.Card([
-            dbc.CardHeader("Detection Frequency", className="h5"),
-            dbc.CardBody(dcc.Graph(id='detection-freq', config={'displayModeBar': False}))
-        ], className="shadow"), md=6),
-        
-        dbc.Col(dbc.Card([
-            dbc.CardHeader("Detection Confidence", className="h5"),
-            dbc.CardBody(dcc.Graph(id='confidence-hist', config={'displayModeBar': False}))
-        ], className="shadow"), md=6)
-    ], className="mb-4"),
-    
-    # Distance and Performance Row
+        dbc.Col(dcc.Graph(id='temperature-graph', figure=create_empty_figure()), width=6),
+        dbc.Col(dcc.Graph(id='detection-frequency-graph', figure=create_empty_figure()), width=6),
+    ]),
     dbc.Row([
-        dbc.Col(dbc.Card([
-            dbc.CardHeader("Object Distance (cm)", className="h5"),
-            dbc.CardBody(dcc.Graph(id='distance-graph', config={'displayModeBar': False}))
-        ], className="shadow"), md=6),
-        
-        dbc.Col(dbc.Card([
-            dbc.CardHeader("Frames Per Second", className="h5"),
-            dbc.CardBody(dcc.Graph(id='fps-graph', config={'displayModeBar': False}))
-        ], className="shadow"), md=6)
-    ], className="mb-4"),
-    
-    # Data Table
+        dbc.Col(dcc.Graph(id='detection-confidence-graph', figure=create_empty_figure()), width=6),
+    ]),
     dbc.Row([
-        dbc.Col(dbc.Card([
-            dbc.CardHeader("Event Log", className="h5"),
-            dbc.CardBody([
-                dbc.Row([
-                    dbc.Col(html.Small("Last updated: ", id='last-update-text'), width=6),
-                    dbc.Col(dbc.Button("Refresh Now", id='refresh-button', color="primary", size="sm"), width=6, className="text-right")
-                ]),
-                dash_table.DataTable(
-                    id='data-table',
-                    columns=[{"name": i, "id": i} for i in [
-                        'timestamp', 'event_type', 'label', 'confidence',
-                        'estimated_distance_cm', 'FPS', 'CPU', 'MEM', 'TEMP'
-                    ]],
-                    page_size=10,
-                    style_table={'overflowX': 'auto', 'height': '300px', 'overflowY': 'auto'},
-                    style_cell={
-                        'textAlign': 'left',
-                        'padding': '8px',
-                        'backgroundColor': 'rgba(0,0,0,0)',
-                        'color': 'white',
-                        'border': '1px solid #444',
-                        'maxWidth': '150px',
-                        'whiteSpace': 'normal'
-                    },
-                    style_header={
-                        'backgroundColor': '#2c3e50',
-                        'fontWeight': 'bold'
-                    },
-                    style_data_conditional=[
-                        {
-                            'if': {'row_index': 'odd'},
-                            'backgroundColor': 'rgba(50, 50, 50, 0.1)'
-                        }
-                    ],
-                    filter_action="native",
-                    sort_action="native",
-                    sort_mode="multi",
-                    page_action="native"
-                )
-            ])
-        ], className="shadow"), width=12)
-    ])
+        dbc.Col(dash_table.DataTable(id='data-table'), width=12)
+    ]),
 ])
 
-# =============================================
-# Callbacks
-# =============================================
-
+# Define the callbacks to update graphs and data table
 @app.callback(
-    [Output('data-store', 'data'),
-     Output('firebase-status', 'children'),
-     Output('last-update', 'data')],
-    [Input('interval-component', 'n_intervals'),
-     Input('refresh-button', 'n_clicks')],
-    prevent_initial_call=False
-)
-def update_data_store(n_intervals: int, n_clicks: int) -> Tuple[Dict, dbc.Alert, float]:
-    """Fetch data from Firebase and update storage."""
-    ctx = dash.callback_context
-    
-    # Only proceed if this is the initial call or a refresh button click
-    if not ctx.triggered or ctx.triggered[0]['prop_id'] == 'interval-component.n_intervals' or ctx.triggered[0]['prop_id'] == 'refresh-button.n_clicks':
-        try:
-            df = fetch_firebase_data()
-            if df.empty:
-                logger.info("No data available in Firebase")
-                return {}, dbc.Alert("Connected to Firebase but no data found", color="warning"), time.time()
-            
-            logger.info(f"Successfully fetched {len(df)} records")
-            return df.to_dict('records'), dbc.Alert([
-                html.I(className="bi bi-check-circle me-2"),
-                "Connected to Firebase"
-            ], color="success", className="d-flex align-items-center"), time.time()
-            
-        except Exception as e:
-            logger.error(f"Error updating data store: {e}")
-            return {}, dbc.Alert([
-                html.I(className="bi bi-exclamation-triangle me-2"),
-                f"Firebase error: {str(e)}"
-            ], color="danger", className="d-flex align-items-center"), time.time()
-    
-    return no_update, no_update, no_update
-
-@app.callback(
-    Output('last-update-text', 'children'),
-    [Input('last-update', 'data')]
-)
-def update_last_update_text(last_update: float) -> str:
-    """Update the last updated timestamp text."""
-    if last_update:
-        return f"Last updated: {datetime.fromtimestamp(last_update).strftime('%Y-%m-%d %H:%M:%S')}"
-    return "Last updated: Never"
-
-@app.callback(
-    [Output('cpu-graph', 'figure'),
-     Output('mem-graph', 'figure'),
-     Output('temp-graph', 'figure'),
-     Output('detection-freq', 'figure'),
-     Output('confidence-hist', 'figure'),
-     Output('distance-graph', 'figure'),
-     Output('fps-graph', 'figure'),
+    [Output('cpu-usage-graph', 'figure'),
+     Output('memory-usage-graph', 'figure'),
+     Output('temperature-graph', 'figure'),
+     Output('detection-frequency-graph', 'figure'),
+     Output('detection-confidence-graph', 'figure'),
      Output('data-table', 'data')],
-    [Input('data-store', 'data')]
+    Input('interval-component', 'n_intervals')
 )
-def update_dashboard(data: List[Dict]) -> Tuple[go.Figure, ...]:
-    """Update all dashboard components with new data."""
-    if not data:
-        logger.info("No data available for dashboard update")
-        empty_fig = create_empty_figure()
-        return [empty_fig] * 7, []
-    
-    try:
-        df = pd.DataFrame(data)
-        
-        # Convert timestamp if needed
-        if len(df) > 0 and isinstance(df['timestamp'].iloc[0], str):
-            df['timestamp'] = pd.to_datetime(df['timestamp'])
-        
-        # Filter data
-        system_stats = df[df['event_type'] == 'system_stats'].copy()
-        detections = df[df['event_type'] == 'detection'].copy()
-        
-        logger.info(f"Updating dashboard with {len(system_stats)} system stats and {len(detections)} detections")
-        
-        # Create figures with error handling
-        def safe_create_figure(creator, *args, **kwargs):
-            try:
-                return creator(*args, **kwargs)
-            except Exception as e:
-                logger.error(f"Error creating figure: {e}")
-                return create_empty_figure("Error displaying data")
-        
-        # System metrics figures
-        cpu_fig = safe_create_figure(
-            px.line, system_stats, x='timestamp', y='CPU',
-            title='', labels={'CPU': 'Usage %'},
-            color_discrete_sequence=['#1f77b4']
-        )
-        
-        mem_fig = safe_create_figure(
-            px.line, system_stats, x='timestamp', y='MEM',
-            title='', labels={'MEM': 'Usage %'},
-            color_discrete_sequence=['#ff7f0e']
-        )
-        
-        temp_fig = safe_create_figure(
-            px.line, system_stats, x='timestamp', y='TEMP',
-            title='', labels={'TEMP': '°C'},
-            color_discrete_sequence=['#d62728']
-        )
-        if isinstance(temp_fig, go.Figure):
-            temp_fig.add_hline(y=80, line_dash="dash", line_color="red")
-        
-        # Detection figures
-        detection_freq = safe_create_figure(
-            px.histogram, detections, x='timestamp', 
-            title='', labels={'timestamp': 'Time'},
-            color_discrete_sequence=['#2ca02c']
-        )
-        
-        confidence_hist = safe_create_figure(
-            px.histogram, detections, x='confidence',
-            title='', labels={'confidence': 'Score'},
-            color_discrete_sequence=['#9467bd'],
-            nbins=20,
-            range_x=[0, 1] if not detections.empty else None
-        )
-        
-        distance_fig = safe_create_figure(
-            px.scatter, detections, x='timestamp', y='estimated_distance_cm',
-            color='confidence',
-            title='', labels={'estimated_distance_cm': 'Distance (cm)'},
-            color_continuous_scale='Viridis'
-        )
-        
-        fps_fig = safe_create_figure(
-            px.scatter, detections, x='timestamp', y='FPS',
-            title='', labels={'FPS': 'Frames Per Second'},
-            color_discrete_sequence=['#17becf']
-        )
-        
-        # Apply consistent styling to all figures
-        for fig in [cpu_fig, mem_fig, temp_fig, detection_freq, 
-                   confidence_hist, distance_fig, fps_fig]:
-            if isinstance(fig, go.Figure):
-                fig.update_layout(
-                    plot_bgcolor='rgba(0,0,0,0)',
-                    paper_bgcolor='rgba(0,0,0,0)',
-                    font={'color': 'white'},
-                    margin={'l': 40, 'r': 40, 't': 30, 'b': 30},
-                    xaxis={'gridcolor': '#444'},
-                    yaxis={'gridcolor': '#444'},
-                    hovermode='x unified'
-                )
-        
-        return (
-            cpu_fig, mem_fig, temp_fig,
-            detection_freq, confidence_hist,
-            distance_fig, fps_fig,
-            df.to_dict('records')
-        )
-    
-    except Exception as e:
-        logger.error(f"Error in dashboard update: {e}")
-        empty_fig = create_empty_figure("Error displaying data")
-        return [empty_fig] * 7, []
+def update_graphs(n):
+    # Fetch data from Firebase
+    df = fetch_firebase_data()
 
-# =============================================
-# Run the App
-# =============================================
+    if df.empty:
+        return [create_empty_figure("No data available")] * 5, []
 
-if __name__ == '__main__':
-    app.run_server(debug=True, host="0.0.0.0", port=8050)
+    # CPU Usage Graph
+    cpu_fig = px.line(df, x='timestamp', y='cpu_usage', title='CPU Usage')
+
+    # Memory Usage Graph
+    memory_fig = px.line(df, x='timestamp', y='memory_usage', title='Memory Usage')
+
+    # Temperature Graph
+    temp_fig = px.line(df, x='timestamp', y='temperature', title='Temperature')
+
+    # Detection Frequency Graph
+    freq_fig = px.line(df, x='timestamp', y='detection_frequency', title='Detection Frequency')
+
+    # Detection Confidence Graph
+    conf_fig = px.line(df, x='timestamp', y='detection_confidence', title='Detection Confidence')
+
+    # Data Table
+    data_table = df.to_dict('records')
+
+    return cpu_fig, memory_fig, temp_fig, freq_fig, conf_fig, data_table
+
+# Interval component for live updates (optional)
+app.layout.children.append(dcc.Interval(id='interval-component', interval=30*1000, n_intervals=0))
+
+# Run the app
+if __name__ == "__main__":
+    app.run_server(debug=True)
