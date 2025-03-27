@@ -13,9 +13,9 @@ import json
 app = dash.Dash(__name__, external_stylesheets=[dbc.themes.DARKLY])
 server = app.server
 
-# =============================================
+# ================================================
 # Firebase Configuration with Enhanced Error Handling
-# =============================================
+# ================================================
 
 def initialize_firebase():
     """Initialize Firebase with proper credential handling"""
