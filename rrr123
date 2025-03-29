@@ -1,5 +1,8 @@
-dash
-dash-bootstrap-components
-plotly
-pandas
-firebase-admin
+dash==2.11.1
+dash-bootstrap-components==1.1.0
+plotly==5.10.0
+pandas==1.5.3
+dash-table==5.0.0
+firebase-admin==5.3.0
+geopy==2.2.0
+python-dotenv==0.20.0  
